@@ -170,3 +170,4 @@ scripts/
 *.lseq
 *.parquet
 *.db
+.vscode/
