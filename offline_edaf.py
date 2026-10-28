@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     # NLMT
     nlmt_path = folder_path.joinpath("upf")
-    nlmt_file = list(nlmt_path.glob("se_*"))[0]
+    nlmt_file = list(nlmt_path.glob("se_.*"))[0]
     if nlmt_file.suffix == '.json':
         with open(nlmt_file, 'r') as file:
             nlmt_records = json.load(file)['oneway_trips']
@@ -82,16 +82,16 @@ if __name__ == "__main__":
     packets_dict = packet_analyzer.figure_packettx_from_ueipids(uids_arr)
     print(packets_dict)
 
-    # # 2) Channel analyzer
-    # chan_analyzer = ULChannelAnalyzer(result_database_file)
-    # begin_ts = chan_analyzer.first_ts
-    # end_ts = chan_analyzer.last_ts
-    # logger.info(f"Duration uploaded: {(end_ts-begin_ts)*1000} ms")
-    # WINDOW_LEN_SECONDS = 2
-    # mcs_arr = chan_analyzer.find_mcs_from_ts(begin_ts,begin_ts+WINDOW_LEN_SECONDS)
-    # tb_arr = chan_analyzer.find_mac_attempts_from_ts(begin_ts,begin_ts+WINDOW_LEN_SECONDS)
-    # print(mcs_arr)
-    # print(tb_arr)
+    # 2) Channel analyzer
+    chan_analyzer = ULChannelAnalyzer(result_database_file)
+    begin_ts = chan_analyzer.first_ts
+    end_ts = chan_analyzer.last_ts
+    logger.info(f"Duration uploaded: {(end_ts-begin_ts)*1000} ms")
+    WINDOW_LEN_SECONDS = 2
+    mcs_arr = chan_analyzer.find_mcs_from_ts(begin_ts,begin_ts+WINDOW_LEN_SECONDS)
+    tb_arr = chan_analyzer.find_mac_attempts_from_ts(begin_ts,begin_ts+WINDOW_LEN_SECONDS)
+    print(mcs_arr)
+    print(tb_arr)
 
     # # 3) Scheduling analyzer
     # sched_analyzer = ULSchedulingAnalyzer(

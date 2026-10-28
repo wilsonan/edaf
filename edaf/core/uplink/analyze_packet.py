@@ -40,21 +40,21 @@ class ULPacketAnalyzer:
             self.gnb_mac_attempts_df = pd.read_sql('SELECT * FROM gnb_mac_attempts', conn)
             logger.debug(f"gnb_mac_attempts_df: {self.gnb_mac_attempts_df.columns.tolist()}")
 
-            # Commented on April 8th to run old datasets
-            # self.gnb_rssi_values_df = pd.read_sql('SELECT * FROM gnb_rssi_values', conn)
-            # logger.debug(f"gnb_rssi_values_df: {self.gnb_rssi_values_df.columns.tolist()}")
+            # Comment for running on old datasets
+            self.gnb_rssi_values_df = pd.read_sql('SELECT * FROM gnb_rssi_values', conn)
+            logger.debug(f"gnb_rssi_values_df: {self.gnb_rssi_values_df.columns.tolist()}")
 
-            # Commented on April 8th to run old datasets
-            # self.gnb_ulcqi_values_df = pd.read_sql('SELECT * FROM gnb_ulcqi_values', conn)
-            # logger.debug(f"gnb_ulcqi_values_df: {self.gnb_ulcqi_values_df.columns.tolist()}")
+            # Comment for running on old datasets
+            self.gnb_ulcqi_values_df = pd.read_sql('SELECT * FROM gnb_ulcqi_values', conn)
+            logger.debug(f"gnb_ulcqi_values_df: {self.gnb_ulcqi_values_df.columns.tolist()}")
 
-            # Commented on April 8th to run old datasets
-            # self.gnb_rsrp_values_df = pd.read_sql('SELECT * FROM gnb_rsrp_values', conn)
-            # logger.debug(f"gnb_rsrp_values_df: {self.gnb_rsrp_values_df.columns.tolist()}")
+            # Comment for running on old datasets
+            self.gnb_rsrp_values_df = pd.read_sql('SELECT * FROM gnb_rsrp_values', conn)
+            logger.debug(f"gnb_rsrp_values_df: {self.gnb_rsrp_values_df.columns.tolist()}")
 
-            # Commented on April 8th to run old datasets
-            # self.gnb_snr_values_df = pd.read_sql('SELECT * FROM gnb_snr_values', conn)
-            # logger.debug(f"gnb_snr_values_df: {self.gnb_snr_values_df.columns.tolist()}")
+            # Comment for running on old datasets
+            self.gnb_snr_values_df = pd.read_sql('SELECT * FROM gnb_snr_values', conn)
+            logger.debug(f"gnb_snr_values_df: {self.gnb_snr_values_df.columns.tolist()}")
     
             self.ue_ip_packets_df = pd.read_sql('SELECT * FROM ue_ip_packets', conn)
             logger.debug(f"ue_ip_packets_df: {self.ue_ip_packets_df.columns.tolist()}")
@@ -364,10 +364,19 @@ class ULPacketAnalyzer:
         # Create index by seqno for O(1) lookup instead of O(n) filtering
         nlmt_by_seqno = nlmt_df.set_index('seqno')
         
+         # Create a lookup dictionary: ip_id -> packet
+        packets_by_id = {pkt['id']: pkt for pkt in packets}
+
         sorted_ipid_list = self.sort_ipids_by_arrival_time(ue_ipid_list)
         
-        for idx, ip_id in enumerate(sorted_ipid_list):
-            packet_timestamp = packets[idx]['ip.in_t']
+        for ip_id in sorted_ipid_list:
+            # Check if this ip_id has a corresponding packet
+            if ip_id not in packets_by_id:
+                logger.warning(f"No packet found for UE IP ID {ip_id}")
+                continue
+
+            packet = packets_by_id[ip_id]
+            packet_timestamp = packet['ip.in_t']
             
             # Vectorized operation: find all candidates within time margin
             time_differences = (nlmt_df['app_send_timestamp'] - packet_timestamp).abs() * 1000
@@ -383,10 +392,10 @@ class ULPacketAnalyzer:
                 app_send_timestamp = entry['app_send_timestamp']
                 timestamp_diff_ms = (packet_timestamp - app_send_timestamp) * 1000
                 
-                packets[idx]['app.sn'] = seqno
-                packets[idx]['app.ip.in_t'] = app_send_timestamp
-                packets[idx]['app.ip.out_t'] = entry['app_receive_timestamp']
-                packets[idx]['nlmt_gtp_timediff_ms'] = timestamp_diff_ms
+                packet['app.sn'] = seqno
+                packet['app.ip.in_t'] = app_send_timestamp
+                packet['app.ip.out_t'] = entry['app_receive_timestamp']
+                packet['nlmt_gtp_timediff_ms'] = timestamp_diff_ms
                 
                 logger.debug(f"Matched UE IP ID {ip_id} to NLMT seqno {seqno} (error: {timestamp_diff_ms:.3f}ms)")
             else:
@@ -719,10 +728,15 @@ class ULPacketAnalyzer:
                 else:
                     # possibly successful harq attempt
                     macattempt['phy.decode_t'] = float(gnb_mac_attempt['phy.decodeend.timestamp'])
-                    # macattempt['rssi'] = float(gnb_mac_attempt['phy.measure.rssi'])
-                    # macattempt['wideband_cqi'] = float(gnb_mac_attempt['phy.measure.wband_cqi'])
-                    # macattempt['noise_pwr'] = float(gnb_mac_attempt['phy.measure.n0_power'])
-                    # macattempt['rx_pwr'] = float(gnb_mac_attempt['phy.measure.rx_power'])
+
+                    # Comment to run older datasets without these fields
+                    #=======================================================================
+                    macattempt['rssi'] = float(gnb_mac_attempt['phy.measure.rssi'])
+                    macattempt['wideband_cqi'] = float(gnb_mac_attempt['phy.measure.wband_cqi'])
+                    macattempt['noise_pwr'] = float(gnb_mac_attempt['phy.measure.n0_power'])
+                    macattempt['rx_pwr'] = float(gnb_mac_attempt['phy.measure.rx_power'])
+                    #==========================================================================
+
                     if gnb_mac_attempt['phy.decodeend.suc']:
                         # possibly successful gnb harq attempt
 
@@ -732,18 +746,21 @@ class ULPacketAnalyzer:
                         fm_s = int(gnb_mac_attempt['phy.detectend.frame'])
                         sl_s = int(gnb_mac_attempt['phy.detectend.slot'])
                         
-                        # # Insert the ul_cqi values here if the transmission is successful
-                        # gnb_ulcqi_values = self.gnb_ulcqi_values_df
-                        # ulcqi_match = gnb_ulcqi_values[(gnb_ulcqi_values['phy2mac.measure.frame'] == fm_s) &
-                        #                           (gnb_ulcqi_values['phy2mac.measure.slot'] == sl_s) &
-                        #                            (gnb_ulcqi_values['phy2mac.measure.hqpid'] == hq_s)]
+                        # Comment to run older datasets without these fields
+                        #=======================================================================
+                        # Insert the ul_cqi values here if the transmission is successful
+                        gnb_ulcqi_values = self.gnb_ulcqi_values_df
+                        ulcqi_match = gnb_ulcqi_values[(gnb_ulcqi_values['phy2mac.measure.frame'] == fm_s) &
+                                                  (gnb_ulcqi_values['phy2mac.measure.slot'] == sl_s) &
+                                                   (gnb_ulcqi_values['phy2mac.measure.hqpid'] == hq_s)]
                         
-                        # # If the ulcqi line has a match with the frame, slot and hqpid, then add it to the macattempt structure
-                        # if ulcqi_match.empty:
-                        #     print(f"No UL_CQI match for frame={fm_s}, slot={sl_s}, hqpid={hq_s}")
-                        # else:
-                        #     # print("UL_CQI Match found:")
-                        #     macattempt['ul_cqi'] = ulcqi_match['phy2mac.measure.ul_cqi'].iloc[0]
+                        # If the ulcqi line has a match with the frame, slot and hqpid, then add it to the macattempt structure
+                        if ulcqi_match.empty:
+                            print(f"No UL_CQI match for frame={fm_s}, slot={sl_s}, hqpid={hq_s}")
+                        else:
+                            # print("UL_CQI Match found:")
+                            macattempt['ul_cqi'] = ulcqi_match['phy2mac.measure.ul_cqi'].iloc[0]
+                        #==========================================================================
 
 
                         # find rlc segment of this mac attempt

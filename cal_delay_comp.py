@@ -139,11 +139,15 @@ for packet in packets:
     max_rlc_seg = get_max_rlc_seg(packet)
     mcsIdx = get_mcs(packet, mcs_sorted_dict, slots_per_frame=20, slots_duration_ms=0.5)
     mcsIndex.append(mcsIdx)
-    maxNoHarqAttempts.append(len(max_rlc_seg['mac.attempts']))
     packetSN.append(packet['sn'])
     packetID.append(packet['id'])
     packetLen.append(packet['len'])
     nRlcSegments.append(len(packet['rlc.attempts']))
+    if max_rlc_seg is None:
+        maxNoHarqAttempts.append(None)
+        continue
+
+    maxNoHarqAttempts.append(len(max_rlc_seg['mac.attempts']))
 
 # Load CSV into a DataFrame
 df = pd.read_csv(CSV_FILE)

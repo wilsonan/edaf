@@ -120,13 +120,14 @@ def get_max_rlc_seg(packet):
     max_delay = -np.inf
     max_rlc_seg = None
     for rlc_seg in packet['rlc.attempts']:
-        if len(rlc_seg['mac.attempts'])>0 and get_retx_delay_seg(packet, rlc_seg)!=None:
-            if get_retx_delay_seg(packet, rlc_seg) > max_delay:
-                max_delay = get_retx_delay_seg(packet, rlc_seg)
+        retx_delay = get_retx_delay_seg(packet, rlc_seg)
+        if len(rlc_seg['mac.attempts']) > 0 and retx_delay is not None:
+            if retx_delay > max_delay:
+                max_delay = retx_delay
                 max_rlc_seg = rlc_seg
         else:
             logger.error(f"Packet {packet['id']} mac.attempts not present")
-            return None
+            continue
     return  max_rlc_seg
 
 # Calculate the retransmission delay for the segment that experiences maximum service delay.
@@ -138,12 +139,48 @@ def get_retx_delay(packet):
     else:
         return None
 
+# Calculate the total no of harq retransmissions for each packet
+def get_total_harq_retransmissions(packet):
+    total_harq_retx = 0
+    for rlc_seg in packet['rlc.attempts']:
+        if len(rlc_seg['mac.attempts']) is None:
+            len_mac_attempts = 0
+        else:
+            len_mac_attempts = len(rlc_seg['mac.attempts'])
+        total_harq_retx += len_mac_attempts
+    return total_harq_retx
+
+# Calculate the total no of transport block size for each packet
+def get_total_tbs(packet):
+    total_tbs = 0
+    for rlc_seg in packet['rlc.attempts']:
+        if rlc_seg['mac.sdu.tbs'] is None:
+            tmp_tbs = 0
+        else:
+            tmp_tbs = rlc_seg['mac.sdu.tbs']
+        total_tbs += tmp_tbs
+    return total_tbs
+
+# Calculate the total no of resource blocks utilized for each packet
+def get_total_rbs(packet):
+    total_rbs = 0
+    for rlc_seg in packet['rlc.attempts']:
+        for mac_attempt in rlc_seg['mac.attempts']:
+            if mac_attempt['rbs'] is None:
+                tmp_rbs = 0
+            else:
+                tmp_rbs = mac_attempt['rbs']
+            total_rbs += tmp_rbs
+    return total_rbs
+
 
 # Calculate the transmission delay for the segment that experiences maximum service delay.
 # The transmission delay is calculated as the time difference between mac.attempt that experiences maximum delay between phy.in and phy.out or phy.decode (if phy.out is not present). 
 # There is not much delay difference between phy.out and phy.decode, as the decoding is done immediately after receiving the last symbol of the segment. So we can consider phy.decode as the end of transmission if phy.out is not present.            
 def get_tx_delay(packet):
     max_rlc_seg = get_max_rlc_seg(packet)
+    if max_rlc_seg is None:
+        return None
     max_delay = -np.inf
     for mac_attempt in max_rlc_seg['mac.attempts']:
         if mac_attempt.get('phy.in_t')!=None :
@@ -320,3 +357,23 @@ def get_rsrp_for_packet(packet, rsrp_list):
         if rsrp['sn'] == packet['sn'] and rsrp['id'] == packet['id']:
             return rsrp['mean_rsrp']    # Found match
     return None  # No match
+
+# Return the backlog parameter (RLC queue for the UE side) for each packet
+def get_backlog(packet):
+    if packet['backlog']!=None:
+        return packet['backlog']
+    else:
+        logger.error(f"Packet {packet['id']} doesn't contain backlog field")
+        return None
+
+# Return the total number of symbols for each packet
+def get_total_symbols(packet):
+    total_sym = 0
+    for rlc_seg in packet['rlc.attempts']:
+        for mac_attempt in rlc_seg['mac.attempts']:
+            if mac_attempt['symbols'] is None:
+                tmp_sym = 0
+            else:
+                tmp_sym = mac_attempt['symbols']
+            total_sym += tmp_sym
+    return total_sym

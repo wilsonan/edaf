@@ -171,3 +171,6 @@ scripts/
 *.parquet
 *.db
 .vscode/
+AGENTS.md
+delayMeasurements/
+timeWindowExp/
